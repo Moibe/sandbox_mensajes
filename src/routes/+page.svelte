@@ -1,10 +1,13 @@
 <script lang="ts">
 	import Navbar from '$lib/Navbar.svelte';
+	import EventsFeed from '$lib/EventsFeed.svelte';
 </script>
 
 <div class="page">
 	<Navbar />
-	<main></main>
+	<main>
+		<EventsFeed />
+	</main>
 </div>
 
 <style>
