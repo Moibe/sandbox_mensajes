@@ -19,7 +19,7 @@
 	let connected = $state(false);
 	let query = $state('');
 	let hideHealth = $state(false);
-	let groupRepeats = $state(true);
+	let groupRepeats = $state(false);
 	let selected = $state<CallEvent | null>(null);
 	let es: EventSource | undefined;
 	let nextId = 0;
@@ -87,6 +87,10 @@
 		return () => window.removeEventListener('keydown', handler);
 	});
 
+	function isDryRun(e: { summary?: string }) {
+		return e.summary?.startsWith('DRY-RUN') ?? false;
+	}
+
 	const filtered = $derived(
 		events.filter((e) => {
 			if (hideHealth && e.path === '/health') return false;
@@ -102,6 +106,8 @@
 		})
 	);
 
+	const dryRunCount = $derived(events.filter(isDryRun).length);
+
 	const rows = $derived.by<Row[]>(() => {
 		if (!groupRepeats) return filtered.map((e) => ({ ...e, count: 1 }));
 		const out: Row[] = [];
@@ -111,7 +117,8 @@
 				last &&
 				last.method === e.method &&
 				last.path === e.path &&
-				last.status === e.status
+				last.status === e.status &&
+				isDryRun(last) === isDryRun(e)
 			) {
 				last.count++;
 			} else {
@@ -174,6 +181,7 @@
 			</span>
 			<span class="count">
 				{events.length} {events.length === 1 ? 'evento' : 'eventos'}
+				{#if dryRunCount > 0}· {dryRunCount} dry-run{/if}
 				{#if filtered.length !== events.length}· {filtered.length} mostrados{/if}
 			</span>
 			<button type="button" onclick={clearAll} disabled={events.length === 0}>Limpiar</button>
@@ -213,6 +221,7 @@
 				<li
 					class:groupable={row.count === 1}
 					class:grouped={row.count > 1}
+					class:dry={isDryRun(row)}
 					onclick={() => openDetail(row)}
 					onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && openDetail(row)}
 					role="button"
@@ -220,7 +229,10 @@
 				>
 					<span class="time">{fmtTime(row.ts)}</span>
 					<span class="method {methodClass(row.method)}">{row.method}</span>
-					<span class="path">{row.path}</span>
+					<span class="path">
+						{row.path}
+						{#if isDryRun(row)}<span class="dry-badge">DRY</span>{/if}
+					</span>
 					<span class="status {statusClass(row.status)}">{row.status}</span>
 					<span class="dur">{row.duration_ms}ms</span>
 					{#if row.client}<span class="client">{row.client}</span>{/if}
@@ -252,6 +264,7 @@
 				<h3>
 					<span class="method {methodClass(selected.method)}">{selected.method}</span>
 					<code>{selected.path}</code>
+					{#if isDryRun(selected)}<span class="dry-badge">DRY</span>{/if}
 					<span class="status {statusClass(selected.status)}">{selected.status}</span>
 				</h3>
 				<button type="button" class="close" onclick={() => (selected = null)}>×</button>
@@ -420,7 +433,7 @@
 
 	li {
 		display: grid;
-		grid-template-columns: 9ch 5rem 1fr 4ch 5rem auto auto auto;
+		grid-template-columns: 13ch 5rem 1fr 4ch 5rem auto auto auto;
 		gap: 0.6rem;
 		align-items: center;
 		padding: 0.4rem 0.4rem;
@@ -447,8 +460,30 @@
 		background: #fafbfa;
 	}
 
+	li.dry {
+		background: rgba(217, 119, 6, 0.06);
+	}
+
+	li.dry.groupable:hover {
+		background: rgba(217, 119, 6, 0.12);
+	}
+
+	.dry-badge {
+		display: inline-block;
+		font-size: 0.65rem;
+		font-weight: 700;
+		letter-spacing: 0.05em;
+		background: rgba(217, 119, 6, 0.18);
+		color: #92400e;
+		padding: 0.05rem 0.35rem;
+		border-radius: 3px;
+		margin-left: 0.4rem;
+		vertical-align: middle;
+	}
+
 	.time {
 		color: #888;
+		white-space: nowrap;
 	}
 
 	.method {

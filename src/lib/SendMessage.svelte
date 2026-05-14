@@ -1,16 +1,45 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { API_URL } from './api';
+
+	const DRY_RUN_KEY = 'sandbox-mensajes:dry-run:v1';
 
 	let numero = $state('+5215534002530');
 	let mensaje = $state('Prueba X');
+	let dryRun = $state(true);
 	let sending = $state(false);
 	let result = $state<
-		| { kind: 'ok'; sid: string; info: string; raw: string; status: number }
+		| { kind: 'ok'; sid: string; info: string; dryRun: boolean; raw: string; status: number }
 		| { kind: 'err'; detail: string; raw: string; status: number }
 		| null
 	>(null);
 
-	const payload = $derived(JSON.stringify({ numero: numero.trim(), mensaje }, null, 2));
+	onMount(() => {
+		try {
+			const stored = localStorage.getItem(DRY_RUN_KEY);
+			if (stored !== null) dryRun = stored === '1';
+		} catch {
+			// ignore
+		}
+	});
+
+	$effect(() => {
+		try {
+			localStorage.setItem(DRY_RUN_KEY, dryRun ? '1' : '0');
+		} catch {
+			// ignore
+		}
+	});
+
+	const payload = $derived(
+		JSON.stringify(
+			dryRun
+				? { numero: numero.trim(), mensaje, dry_run: true }
+				: { numero: numero.trim(), mensaje },
+			null,
+			2
+		)
+	);
 
 	async function send(e: Event) {
 		e.preventDefault();
@@ -18,10 +47,12 @@
 		sending = true;
 		result = null;
 		try {
+			const body: Record<string, unknown> = { numero: numero.trim(), mensaje };
+			if (dryRun) body.dry_run = true;
 			const res = await fetch(`${API_URL}/enviar_mensaje`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ numero: numero.trim(), mensaje })
+				body: JSON.stringify(body)
 			});
 			const text = await res.text();
 			let data: any = {};
@@ -33,10 +64,12 @@
 				// not JSON, keep text as-is
 			}
 			if (res.ok) {
+				const isDry = data.status === 'dry-run';
 				result = {
 					kind: 'ok',
 					sid: data.message_sid ?? '',
 					info: data.info ?? '',
+					dryRun: isDry,
 					raw,
 					status: res.status
 				};
@@ -91,17 +124,29 @@
 			></textarea>
 		</label>
 
+		<label class="dry-toggle" class:active={dryRun}>
+			<input type="checkbox" bind:checked={dryRun} disabled={sending} />
+			<span>Modo prueba <em>(dry-run — no envía a Twilio)</em></span>
+		</label>
+
 		<div class="preview">
 			<span class="preview-label">JSON a enviar</span>
 			<pre>{payload}</pre>
 		</div>
 
 		<div class="actions">
-			<button type="submit" disabled={sending || !numero.trim() || !mensaje.trim()}>
-				{sending ? 'Enviando…' : 'Enviar'}
+			<button
+				type="submit"
+				class:dry={dryRun}
+				disabled={sending || !numero.trim() || !mensaje.trim()}
+			>
+				{sending ? 'Enviando…' : dryRun ? 'Enviar (prueba)' : 'Enviar'}
 			</button>
 			{#if result?.kind === 'ok'}
-				<span class="result ok">✓ {result.info} <code>{result.sid}</code></span>
+				<span class="result ok" class:dry={result.dryRun}>
+					{result.dryRun ? '⚡' : '✓'} {result.info}
+					{#if result.sid}<code>{result.sid}</code>{/if}
+				</span>
 			{:else if result?.kind === 'err'}
 				<span class="result err">✗ {result.detail}</span>
 			{/if}
@@ -242,6 +287,36 @@
 		white-space: pre;
 	}
 
+	.dry-toggle {
+		flex-direction: row;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.5rem 0.75rem;
+		border: 1px solid #e5e7eb;
+		border-radius: 6px;
+		background: #fafbfa;
+		cursor: pointer;
+		user-select: none;
+		transition: all 0.15s;
+		font-size: 0.85rem;
+	}
+
+	.dry-toggle.active {
+		border-color: #d97706;
+		background: rgba(217, 119, 6, 0.08);
+		color: #92400e;
+	}
+
+	.dry-toggle em {
+		font-style: normal;
+		color: #888;
+		font-size: 0.78rem;
+	}
+
+	.dry-toggle.active em {
+		color: #b45309;
+	}
+
 	.actions {
 		display: flex;
 		align-items: center;
@@ -265,6 +340,14 @@
 		background: #064d44;
 	}
 
+	button[type='submit'].dry {
+		background: #d97706;
+	}
+
+	button[type='submit'].dry:hover:not(:disabled) {
+		background: #b45309;
+	}
+
 	button[type='submit']:disabled {
 		opacity: 0.55;
 		cursor: default;
@@ -279,6 +362,10 @@
 
 	.result.ok {
 		color: #16a34a;
+	}
+
+	.result.ok.dry {
+		color: #b45309;
 	}
 
 	.result.err {
