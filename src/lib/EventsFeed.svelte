@@ -12,9 +12,10 @@
 		summary?: string;
 	};
 
-	let events = $state<CallEvent[]>([]);
+	let events = $state<(CallEvent & { _id: number })[]>([]);
 	let connected = $state(false);
 	let es: EventSource | undefined;
+	let nextId = 0;
 
 	const MAX_EVENTS = 200;
 
@@ -26,7 +27,7 @@
 		es.onmessage = (e) => {
 			try {
 				const evt = JSON.parse(e.data) as CallEvent;
-				events = [evt, ...events].slice(0, MAX_EVENTS);
+				events = [{ ...evt, _id: nextId++ }, ...events].slice(0, MAX_EVENTS);
 			} catch {
 				// ignore malformed
 			}
@@ -91,7 +92,7 @@
 		</div>
 	{:else}
 		<ul>
-			{#each events as evt (evt.ts + evt.path + Math.random())}
+			{#each events as evt (evt._id)}
 				<li>
 					<span class="time">{fmtTime(evt.ts)}</span>
 					<span class="method {methodClass(evt.method)}">{evt.method}</span>
