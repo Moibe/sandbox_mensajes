@@ -10,14 +10,22 @@
 		duration_ms: number;
 		client?: string | null;
 		summary?: string;
+		_id: number;
 	};
 
-	let events = $state<(CallEvent & { _id: number })[]>([]);
+	type Row = CallEvent & { count: number };
+
+	let events = $state<CallEvent[]>([]);
 	let connected = $state(false);
+	let query = $state('');
+	let hideHealth = $state(false);
+	let groupRepeats = $state(true);
+	let selected = $state<CallEvent | null>(null);
 	let es: EventSource | undefined;
 	let nextId = 0;
 
-	const MAX_EVENTS = 200;
+	const MAX_EVENTS = 500;
+	const STORAGE_KEY = 'sandbox-mensajes:events:v1';
 
 	function connect() {
 		es = new EventSource(`${API_URL}/events`);
@@ -26,8 +34,8 @@
 		};
 		es.onmessage = (e) => {
 			try {
-				const evt = JSON.parse(e.data) as CallEvent;
-				events = [{ ...evt, _id: nextId++ }, ...events].slice(0, MAX_EVENTS);
+				const raw = JSON.parse(e.data) as Omit<CallEvent, '_id'>;
+				events = [{ ...raw, _id: nextId++ }, ...events].slice(0, MAX_EVENTS);
 			} catch {
 				// ignore malformed
 			}
@@ -37,10 +45,80 @@
 		};
 	}
 
-	onMount(connect);
+	onMount(() => {
+		try {
+			const stored = localStorage.getItem(STORAGE_KEY);
+			if (stored) {
+				const parsed = JSON.parse(stored) as CallEvent[];
+				if (Array.isArray(parsed)) {
+					events = parsed.slice(0, MAX_EVENTS);
+					nextId = parsed.reduce((max, e) => Math.max(max, e._id ?? 0), -1) + 1;
+				}
+			}
+		} catch {
+			// corrupt storage, ignore
+		}
+		connect();
+	});
 
 	onDestroy(() => {
 		es?.close();
+	});
+
+	let saveTimer: ReturnType<typeof setTimeout> | undefined;
+	$effect(() => {
+		events;
+		clearTimeout(saveTimer);
+		saveTimer = setTimeout(() => {
+			try {
+				localStorage.setItem(STORAGE_KEY, JSON.stringify(events));
+			} catch {
+				// quota exceeded or unavailable
+			}
+		}, 400);
+	});
+
+	$effect(() => {
+		if (!selected) return;
+		const handler = (e: KeyboardEvent) => {
+			if (e.key === 'Escape') selected = null;
+		};
+		window.addEventListener('keydown', handler);
+		return () => window.removeEventListener('keydown', handler);
+	});
+
+	const filtered = $derived(
+		events.filter((e) => {
+			if (hideHealth && e.path === '/health') return false;
+			const q = query.trim().toLowerCase();
+			if (!q) return true;
+			return (
+				e.method.toLowerCase().includes(q) ||
+				e.path.toLowerCase().includes(q) ||
+				String(e.status).includes(q) ||
+				(e.summary ?? '').toLowerCase().includes(q) ||
+				(e.client ?? '').toLowerCase().includes(q)
+			);
+		})
+	);
+
+	const rows = $derived.by<Row[]>(() => {
+		if (!groupRepeats) return filtered.map((e) => ({ ...e, count: 1 }));
+		const out: Row[] = [];
+		for (const e of filtered) {
+			const last = out[out.length - 1];
+			if (
+				last &&
+				last.method === e.method &&
+				last.path === e.path &&
+				last.status === e.status
+			) {
+				last.count++;
+			} else {
+				out.push({ ...e, count: 1 });
+			}
+		}
+		return out;
 	});
 
 	function methodClass(m: string) {
@@ -62,12 +140,27 @@
 
 	function fmtTime(iso: string) {
 		const d = new Date(iso);
-		return d.toLocaleTimeString('es-MX', { hour12: false }) +
-			'.' + String(d.getMilliseconds()).padStart(3, '0');
+		return (
+			d.toLocaleTimeString('es-MX', { hour12: false }) +
+			'.' +
+			String(d.getMilliseconds()).padStart(3, '0')
+		);
 	}
 
-	function clear() {
+	function clearAll() {
 		events = [];
+		selected = null;
+	}
+
+	function openDetail(row: Row) {
+		if (row.count > 1) return;
+		selected = row;
+	}
+
+	function copyJson() {
+		if (!selected) return;
+		const { _id, ...clean } = selected;
+		navigator.clipboard?.writeText(JSON.stringify(clean, null, 2));
 	}
 </script>
 
@@ -79,33 +172,118 @@
 				<span class="dot"></span>
 				{connected ? 'conectado' : 'desconectado'}
 			</span>
-			<span class="count">{events.length} {events.length === 1 ? 'evento' : 'eventos'}</span>
-			<button type="button" onclick={clear} disabled={events.length === 0}>Limpiar</button>
+			<span class="count">
+				{events.length} {events.length === 1 ? 'evento' : 'eventos'}
+				{#if filtered.length !== events.length}· {filtered.length} mostrados{/if}
+			</span>
+			<button type="button" onclick={clearAll} disabled={events.length === 0}>Limpiar</button>
 		</div>
 	</header>
 
-	{#if events.length === 0}
+	<div class="filters">
+		<input
+			class="search"
+			type="search"
+			placeholder="Buscar (método, path, status, summary, IP)…"
+			bind:value={query}
+		/>
+		<label>
+			<input type="checkbox" bind:checked={hideHealth} />
+			Ocultar /health
+		</label>
+		<label>
+			<input type="checkbox" bind:checked={groupRepeats} />
+			Agrupar repetidos
+		</label>
+	</div>
+
+	{#if rows.length === 0}
 		<div class="empty">
-			{connected
-				? 'Esperando llamadas… haz un request a la API para verlo aquí.'
-				: 'Sin conexión al stream de eventos.'}
+			{#if events.length === 0}
+				{connected
+					? 'Esperando llamadas… haz un request a la API para verlo aquí.'
+					: 'Sin conexión al stream de eventos.'}
+			{:else}
+				Ningún evento coincide con los filtros.
+			{/if}
 		</div>
 	{:else}
 		<ul>
-			{#each events as evt (evt._id)}
-				<li>
-					<span class="time">{fmtTime(evt.ts)}</span>
-					<span class="method {methodClass(evt.method)}">{evt.method}</span>
-					<span class="path">{evt.path}</span>
-					<span class="status {statusClass(evt.status)}">{evt.status}</span>
-					<span class="dur">{evt.duration_ms}ms</span>
-					{#if evt.client}<span class="client">{evt.client}</span>{/if}
-					{#if evt.summary}<span class="summary">{evt.summary}</span>{/if}
+			{#each rows as row (row._id)}
+				<li
+					class:groupable={row.count === 1}
+					class:grouped={row.count > 1}
+					onclick={() => openDetail(row)}
+					onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && openDetail(row)}
+					role="button"
+					tabindex={row.count === 1 ? 0 : -1}
+				>
+					<span class="time">{fmtTime(row.ts)}</span>
+					<span class="method {methodClass(row.method)}">{row.method}</span>
+					<span class="path">{row.path}</span>
+					<span class="status {statusClass(row.status)}">{row.status}</span>
+					<span class="dur">{row.duration_ms}ms</span>
+					{#if row.client}<span class="client">{row.client}</span>{/if}
+					{#if row.summary}<span class="summary">{row.summary}</span>{/if}
+					{#if row.count > 1}<span class="repeat">×{row.count}</span>{/if}
 				</li>
 			{/each}
 		</ul>
 	{/if}
 </section>
+
+{#if selected}
+	<div
+		class="modal-backdrop"
+		onclick={() => (selected = null)}
+		onkeydown={(e) => e.key === 'Escape' && (selected = null)}
+		role="button"
+		tabindex="-1"
+	>
+		<div
+			class="modal"
+			onclick={(e) => e.stopPropagation()}
+			onkeydown={(e) => e.stopPropagation()}
+			role="dialog"
+			tabindex="-1"
+			aria-modal="true"
+		>
+			<header class="modal-header">
+				<h3>
+					<span class="method {methodClass(selected.method)}">{selected.method}</span>
+					<code>{selected.path}</code>
+					<span class="status {statusClass(selected.status)}">{selected.status}</span>
+				</h3>
+				<button type="button" class="close" onclick={() => (selected = null)}>×</button>
+			</header>
+
+			<dl>
+				<dt>Timestamp</dt>
+				<dd>{selected.ts}</dd>
+				<dt>Hora local</dt>
+				<dd>{fmtTime(selected.ts)}</dd>
+				<dt>Duración</dt>
+				<dd>{selected.duration_ms} ms</dd>
+				<dt>Cliente</dt>
+				<dd>{selected.client ?? '—'}</dd>
+				{#if selected.summary}
+					<dt>Summary</dt>
+					<dd>{selected.summary}</dd>
+				{/if}
+			</dl>
+
+			<pre>{JSON.stringify(
+					Object.fromEntries(Object.entries(selected).filter(([k]) => k !== '_id')),
+					null,
+					2
+				)}</pre>
+
+			<div class="modal-actions">
+				<button type="button" onclick={copyJson}>Copiar JSON</button>
+			</div>
+		</div>
+	</div>
+{/if}
 
 <style>
 	.feed {
@@ -188,6 +366,40 @@
 		cursor: default;
 	}
 
+	.filters {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		margin-bottom: 0.6rem;
+		flex-wrap: wrap;
+		font-size: 0.78rem;
+		color: #444;
+	}
+
+	.search {
+		flex: 1 1 220px;
+		min-width: 180px;
+		padding: 0.35rem 0.6rem;
+		border: 1px solid #d1d5db;
+		border-radius: 6px;
+		font: inherit;
+		font-size: 0.8rem;
+		outline: none;
+		background: #fff;
+	}
+
+	.search:focus {
+		border-color: #075e54;
+	}
+
+	.filters label {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3rem;
+		cursor: pointer;
+		user-select: none;
+	}
+
 	.empty {
 		padding: 2rem 0.5rem;
 		text-align: center;
@@ -208,15 +420,31 @@
 
 	li {
 		display: grid;
-		grid-template-columns: 9ch 5rem 1fr 4ch 5rem auto auto;
+		grid-template-columns: 9ch 5rem 1fr 4ch 5rem auto auto auto;
 		gap: 0.6rem;
 		align-items: center;
 		padding: 0.4rem 0.4rem;
 		border-bottom: 1px solid #eef2ef;
+		background: transparent;
+		text-align: left;
+		font: inherit;
 	}
 
 	li:last-child {
 		border-bottom: none;
+	}
+
+	li.groupable {
+		cursor: pointer;
+	}
+
+	li.groupable:hover {
+		background: #f5f9f5;
+	}
+
+	li.grouped {
+		cursor: default;
+		background: #fafbfa;
 	}
 
 	.time {
@@ -274,5 +502,125 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+
+	.repeat {
+		font-size: 0.7rem;
+		font-weight: 700;
+		color: #075e54;
+		background: rgba(7, 94, 84, 0.12);
+		padding: 0.1rem 0.4rem;
+		border-radius: 4px;
+		justify-self: end;
+	}
+
+	.modal-backdrop {
+		position: fixed;
+		inset: 0;
+		background: rgba(0, 0, 0, 0.55);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		z-index: 50;
+		padding: 1rem;
+	}
+
+	.modal {
+		background: #fff;
+		border-radius: 12px;
+		box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+		width: 100%;
+		max-width: 640px;
+		max-height: 85vh;
+		overflow: auto;
+		padding: 1rem 1.25rem;
+	}
+
+	.modal-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.75rem;
+		margin-bottom: 0.75rem;
+	}
+
+	.modal-header h3 {
+		margin: 0;
+		font-size: 0.95rem;
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.modal-header code {
+		font-family:
+			ui-monospace, 'Cascadia Mono', Menlo, Consolas, 'Courier New', monospace;
+		font-size: 0.9rem;
+		color: #111;
+	}
+
+	.close {
+		background: transparent;
+		border: none;
+		font-size: 1.5rem;
+		line-height: 1;
+		color: #666;
+		cursor: pointer;
+		padding: 0 0.4rem;
+	}
+
+	.close:hover {
+		color: #111;
+	}
+
+	dl {
+		display: grid;
+		grid-template-columns: max-content 1fr;
+		gap: 0.3rem 0.9rem;
+		margin: 0 0 0.75rem;
+		font-size: 0.82rem;
+	}
+
+	dt {
+		color: #666;
+		font-weight: 500;
+	}
+
+	dd {
+		margin: 0;
+		color: #111;
+		font-family:
+			ui-monospace, 'Cascadia Mono', Menlo, Consolas, 'Courier New', monospace;
+	}
+
+	pre {
+		margin: 0 0 0.75rem;
+		background: #0f172a;
+		color: #e2e8f0;
+		padding: 0.7rem 0.9rem;
+		border-radius: 6px;
+		font-family:
+			ui-monospace, 'Cascadia Mono', Menlo, Consolas, 'Courier New', monospace;
+		font-size: 0.78rem;
+		line-height: 1.45;
+		overflow-x: auto;
+		white-space: pre;
+	}
+
+	.modal-actions {
+		display: flex;
+		justify-content: flex-end;
+	}
+
+	.modal-actions button {
+		background: #075e54;
+		color: #fff;
+		border: none;
+		padding: 0.4rem 0.9rem;
+		font-weight: 600;
+	}
+
+	.modal-actions button:hover {
+		background: #064d44;
 	}
 </style>
