@@ -23,14 +23,21 @@
 	let selected = $state<CallEvent | null>(null);
 	let es: EventSource | undefined;
 	let nextId = 0;
+	let retryTimer: ReturnType<typeof setTimeout> | undefined;
+	let retryDelay = 1000;
+	let destroyed = false;
 
 	const MAX_EVENTS = 500;
+	const MAX_RETRY_DELAY = 15_000;
 	const STORAGE_KEY = 'sandbox-mensajes:events:v1';
 
 	function connect() {
+		if (destroyed) return;
+		es?.close();
 		es = new EventSource(`${API_URL}/events`);
 		es.onopen = () => {
 			connected = true;
+			retryDelay = 1000;
 		};
 		es.onmessage = (e) => {
 			try {
@@ -42,7 +49,22 @@
 		};
 		es.onerror = () => {
 			connected = false;
+			if (es && es.readyState === EventSource.CLOSED) {
+				scheduleRetry();
+			} else if (es) {
+				es.close();
+				scheduleRetry();
+			}
 		};
+	}
+
+	function scheduleRetry() {
+		if (destroyed) return;
+		clearTimeout(retryTimer);
+		retryTimer = setTimeout(() => {
+			retryDelay = Math.min(retryDelay * 2, MAX_RETRY_DELAY);
+			connect();
+		}, retryDelay);
 	}
 
 	onMount(() => {
@@ -62,6 +84,8 @@
 	});
 
 	onDestroy(() => {
+		destroyed = true;
+		clearTimeout(retryTimer);
 		es?.close();
 	});
 
