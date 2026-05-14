@@ -1,13 +1,16 @@
 <script lang="ts">
 	import { onDestroy, onMount } from 'svelte';
-	import { API_URL, API_HOST, APP_VERSION } from './api';
+	import { API_URL, API_HOST, APP_VERSION, APP_ORIGIN } from './api';
 
 	let online = $state<boolean | null>(null);
 	let timer: ReturnType<typeof setInterval> | undefined;
 
 	async function check() {
 		try {
-			const res = await fetch(`${API_URL}/health`, { cache: 'no-store' });
+			const res = await fetch(`${API_URL}/health`, {
+				cache: 'no-store',
+				headers: { 'X-Origin': APP_ORIGIN }
+			});
 			online = res.ok;
 		} catch {
 			online = false;

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onDestroy, onMount } from 'svelte';
-	import { API_URL } from './api';
+	import { API_URL, APP_ORIGIN } from './api';
 
 	type CallEvent = {
 		ts: string;
@@ -10,6 +10,9 @@
 		duration_ms: number;
 		client?: string | null;
 		summary?: string;
+		user_agent?: string;
+		host?: string;
+		origin?: string;
 		_id: number;
 	};
 
@@ -20,6 +23,7 @@
 	let query = $state('');
 	let hideHealth = $state(false);
 	let groupRepeats = $state(false);
+	let onlyOwn = $state(false);
 	let selected = $state<CallEvent | null>(null);
 	let es: EventSource | undefined;
 	let nextId = 0;
@@ -118,6 +122,7 @@
 	const filtered = $derived(
 		events.filter((e) => {
 			if (hideHealth && e.path === '/health') return false;
+			if (onlyOwn && e.origin !== APP_ORIGIN) return false;
 			const q = query.trim().toLowerCase();
 			if (!q) return true;
 			return (
@@ -125,7 +130,10 @@
 				e.path.toLowerCase().includes(q) ||
 				String(e.status).includes(q) ||
 				(e.summary ?? '').toLowerCase().includes(q) ||
-				(e.client ?? '').toLowerCase().includes(q)
+				(e.client ?? '').toLowerCase().includes(q) ||
+				(e.origin ?? '').toLowerCase().includes(q) ||
+				(e.host ?? '').toLowerCase().includes(q) ||
+				(e.user_agent ?? '').toLowerCase().includes(q)
 			);
 		})
 	);
@@ -227,6 +235,10 @@
 			<input type="checkbox" bind:checked={groupRepeats} />
 			Agrupar repetidos
 		</label>
+		<label title="Filtra solo eventos con X-Origin = {APP_ORIGIN}">
+			<input type="checkbox" bind:checked={onlyOwn} />
+			Solo mis llamadas
+		</label>
 	</div>
 
 	{#if rows.length === 0}
@@ -303,6 +315,23 @@
 				<dd>{selected.duration_ms} ms</dd>
 				<dt>Cliente</dt>
 				<dd>{selected.client ?? '—'}</dd>
+				{#if selected.origin}
+					<dt>Origin</dt>
+					<dd>
+						{selected.origin}
+						{#if selected.origin === APP_ORIGIN}
+							<span class="own-badge">propio</span>
+						{/if}
+					</dd>
+				{/if}
+				{#if selected.host}
+					<dt>Host</dt>
+					<dd>{selected.host}</dd>
+				{/if}
+				{#if selected.user_agent}
+					<dt>User-Agent</dt>
+					<dd class="ua" title={selected.user_agent}>{selected.user_agent}</dd>
+				{/if}
 				{#if selected.summary}
 					<dt>Summary</dt>
 					<dd>{selected.summary}</dd>
@@ -650,6 +679,32 @@
 		color: #111;
 		font-family:
 			ui-monospace, 'Cascadia Mono', Menlo, Consolas, 'Courier New', monospace;
+	}
+
+	dd.ua {
+		max-width: 100%;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: 0.75rem;
+		color: #444;
+		cursor: help;
+	}
+
+	.own-badge {
+		display: inline-block;
+		font-size: 0.65rem;
+		font-weight: 700;
+		letter-spacing: 0.04em;
+		background: rgba(22, 163, 74, 0.18);
+		color: #15803d;
+		padding: 0.05rem 0.4rem;
+		border-radius: 3px;
+		margin-left: 0.4rem;
+		vertical-align: middle;
+		text-transform: uppercase;
+		font-family:
+			-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 	}
 
 	pre {

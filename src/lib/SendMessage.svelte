@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { API_URL } from './api';
+	import { API_URL, APP_ORIGIN } from './api';
 
 	const DRY_RUN_KEY = 'sandbox-mensajes:dry-run:v1';
 
@@ -51,7 +51,10 @@
 			if (dryRun) body.dry_run = true;
 			const res = await fetch(`${API_URL}/enviar_mensaje`, {
 				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
+				headers: {
+					'Content-Type': 'application/json',
+					'X-Origin': APP_ORIGIN
+				},
 				body: JSON.stringify(body)
 			});
 			const text = await res.text();
