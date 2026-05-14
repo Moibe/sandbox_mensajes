@@ -1,11 +1,17 @@
 <script lang="ts">
 	import { onDestroy, onMount } from 'svelte';
-	import { API_URL, API_HOST, APP_VERSION, APP_ORIGIN } from './api';
+	import { API_URL, getApiHost, APP_VERSION, APP_ORIGIN } from './api';
 
 	let online = $state<boolean | null>(null);
+	let checking = $state(false);
+	let apiHost = $state('');
 	let timer: ReturnType<typeof setInterval> | undefined;
 
+	const POLL_INTERVAL_MS = 5 * 60 * 1000;
+
 	async function check() {
+		if (checking) return;
+		checking = true;
 		try {
 			const res = await fetch(`${API_URL}/health`, {
 				cache: 'no-store',
@@ -14,16 +20,38 @@
 			online = res.ok;
 		} catch {
 			online = false;
+		} finally {
+			checking = false;
 		}
 	}
 
-	onMount(() => {
+	function startPolling() {
+		if (timer) return;
 		check();
-		timer = setInterval(check, 5000);
+		timer = setInterval(check, POLL_INTERVAL_MS);
+	}
+
+	function stopPolling() {
+		if (timer) {
+			clearInterval(timer);
+			timer = undefined;
+		}
+	}
+
+	function handleVisibility() {
+		if (document.visibilityState === 'visible') startPolling();
+		else stopPolling();
+	}
+
+	onMount(() => {
+		apiHost = getApiHost();
+		if (document.visibilityState === 'visible') startPolling();
+		document.addEventListener('visibilitychange', handleVisibility);
 	});
 
 	onDestroy(() => {
-		if (timer) clearInterval(timer);
+		stopPolling();
+		document.removeEventListener('visibilitychange', handleVisibility);
 	});
 </script>
 
@@ -34,27 +62,38 @@
 			<h1>Sandbox Mensajes 📧</h1>
 			<div class="sub">
 				<span class="version">versión {APP_VERSION}</span>
-				<span
+				<button
+					type="button"
 					class="status"
 					class:online={online === true}
 					class:offline={online === false}
 					class:pending={online === null}
+					class:checking
+					onclick={check}
+					disabled={checking}
+					title="Click para verificar ahora (auto cada 5 min)"
 				>
 					<span class="dot"></span>
-					{online === true ? 'API en línea' : online === false ? 'API offline' : 'verificando…'}
-				</span>
+					{checking
+						? 'verificando…'
+						: online === true
+							? 'API en línea'
+							: online === false
+								? 'API offline'
+								: 'verificando…'}
+				</button>
 			</div>
 		</div>
 	</div>
 
 	<div class="right">
-		{#if API_HOST}
-			<a class="docs-link" href={`http://${API_HOST}/docs`} target="_blank" rel="noopener">
+		{#if apiHost}
+			<a class="docs-link" href={`http://${apiHost}/docs`} target="_blank" rel="noopener">
 				Docs ↗
 			</a>
 			<div class="host-chip">
 				<span class="label">HOST</span>
-				<code>{API_HOST}</code>
+				<code>{apiHost}</code>
 			</div>
 		{/if}
 	</div>
@@ -123,6 +162,33 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 0.35rem;
+		background: transparent;
+		border: none;
+		padding: 0.15rem 0.4rem;
+		margin: 0 -0.4rem;
+		border-radius: 4px;
+		color: inherit;
+		font: inherit;
+		cursor: pointer;
+		transition: background 0.15s;
+	}
+
+	.status:hover:not(:disabled) {
+		background: rgba(255, 255, 255, 0.12);
+	}
+
+	.status:disabled {
+		cursor: progress;
+	}
+
+	.status.checking .dot {
+		animation: spin 1s linear infinite;
+		background: #f0b429;
+	}
+
+	@keyframes spin {
+		from { transform: rotate(0deg); }
+		to { transform: rotate(360deg); }
 	}
 
 	.dot {
