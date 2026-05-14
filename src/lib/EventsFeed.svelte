@@ -13,6 +13,7 @@
 		user_agent?: string;
 		host?: string;
 		origin?: string;
+		original_numero?: string;
 		_id: number;
 	};
 
@@ -119,6 +120,22 @@
 		return e.summary?.startsWith('DRY-RUN') ?? false;
 	}
 
+	function extractNormalized(summary?: string): string | null {
+		if (!summary) return null;
+		const match = summary.match(/to=whatsapp:(\S+)/);
+		return match ? match[1] : null;
+	}
+
+	function wasNormalized(event: CallEvent): boolean {
+		if (!event.original_numero) return false;
+		const normalized = extractNormalized(event.summary);
+		if (!normalized) return false;
+		// Comparación lax: si el original ya tenía whatsapp:+521... idéntico al normalizado, no hubo cambio.
+		const originalClean = event.original_numero.replace(/\s+/g, '');
+		const normalizedClean = normalized.replace(/^whatsapp:/, '');
+		return originalClean !== normalized && originalClean !== normalizedClean;
+	}
+
 	const filtered = $derived(
 		events.filter((e) => {
 			if (hideHealth && e.path === '/health') return false;
@@ -133,7 +150,8 @@
 				(e.client ?? '').toLowerCase().includes(q) ||
 				(e.origin ?? '').toLowerCase().includes(q) ||
 				(e.host ?? '').toLowerCase().includes(q) ||
-				(e.user_agent ?? '').toLowerCase().includes(q)
+				(e.user_agent ?? '').toLowerCase().includes(q) ||
+				(e.original_numero ?? '').toLowerCase().includes(q)
 			);
 		})
 	);
@@ -331,6 +349,15 @@
 				{#if selected.user_agent}
 					<dt>User-Agent</dt>
 					<dd class="ua" title={selected.user_agent}>{selected.user_agent}</dd>
+				{/if}
+				{#if selected.original_numero}
+					<dt>Número enviado</dt>
+					<dd>
+						{selected.original_numero}
+						{#if wasNormalized(selected)}
+							<span class="normalized-badge" title="La API normalizó este número">normalizado</span>
+						{/if}
+					</dd>
 				{/if}
 				{#if selected.summary}
 					<dt>Summary</dt>
@@ -705,6 +732,23 @@
 		text-transform: uppercase;
 		font-family:
 			-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+	}
+
+	.normalized-badge {
+		display: inline-block;
+		font-size: 0.65rem;
+		font-weight: 700;
+		letter-spacing: 0.04em;
+		background: rgba(217, 119, 6, 0.18);
+		color: #92400e;
+		padding: 0.05rem 0.4rem;
+		border-radius: 3px;
+		margin-left: 0.4rem;
+		vertical-align: middle;
+		text-transform: uppercase;
+		font-family:
+			-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+		cursor: help;
 	}
 
 	pre {
