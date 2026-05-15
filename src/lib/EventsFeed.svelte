@@ -22,7 +22,7 @@
 	let events = $state<CallEvent[]>([]);
 	let connected = $state(false);
 	let query = $state('');
-	let hideHealth = $state(false);
+	let hideHealth = $state(true);
 	let groupRepeats = $state(false);
 	let onlyOwn = $state(false);
 	let selected = $state<CallEvent | null>(null);
