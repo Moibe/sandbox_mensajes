@@ -26,7 +26,7 @@
 	let hideHealth = $state(true);
 	let groupRepeats = $state(false);
 	let onlyOwn = $state(false);
-	let hideOwn = $state(false);
+	let hideOwn = $state(true);
 	let selected = $state<CallEvent | null>(null);
 	let es: EventSource | undefined;
 	let nextId = 0;
@@ -305,9 +305,11 @@
 					</span>
 					<span class="status {statusClass(row.status)}">{row.status}</span>
 					<span class="dur">{row.duration_ms}ms</span>
-					{#if row.client}<span class="client">{row.client}</span>{/if}
-					{#if row.summary}<span class="summary">{row.summary}</span>{/if}
-					{#if row.count > 1}<span class="repeat">×{row.count}</span>{/if}
+					<span class="client">{row.client ?? ''}</span>
+					<span class="summary" title={row.summary ?? ''}>{row.summary ?? ''}</span>
+					<span class="repeat-slot">
+						{#if row.count > 1}<span class="repeat">×{row.count}</span>{/if}
+					</span>
 				</li>
 			{/each}
 		</ul>
@@ -526,6 +528,7 @@
 		padding: 0;
 		max-height: 60vh;
 		overflow-y: auto;
+		overflow-x: auto;
 		font-family:
 			ui-monospace, 'Cascadia Mono', Menlo, Consolas, 'Courier New', monospace;
 		font-size: 0.8rem;
@@ -533,7 +536,7 @@
 
 	li {
 		display: grid;
-		grid-template-columns: 13ch 5rem 1fr 4ch 5rem auto auto auto;
+		grid-template-columns: 13ch 5rem 22ch 5ch 6ch 15ch 1fr auto;
 		gap: 0.6rem;
 		align-items: center;
 		padding: 0.4rem 0.4rem;
@@ -633,10 +636,16 @@
 	.summary {
 		color: #555;
 		font-size: 0.72rem;
-		max-width: 30ch;
+		min-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+
+	.repeat-slot {
+		justify-self: end;
+		min-width: 3.5rem;
+		text-align: right;
 	}
 
 	.repeat {
@@ -646,7 +655,6 @@
 		background: rgba(7, 94, 84, 0.12);
 		padding: 0.1rem 0.4rem;
 		border-radius: 4px;
-		justify-self: end;
 	}
 
 	.modal-backdrop {
