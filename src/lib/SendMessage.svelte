@@ -3,10 +3,12 @@
 	import { API_URL, APP_ORIGIN } from './api';
 
 	const DRY_RUN_KEY = 'sandbox-mensajes:dry-run:v1';
+	const COLLAPSED_KEY = 'sandbox-mensajes:send-collapsed:v1';
 
 	let numero = $state('+5215534002530');
 	let mensaje = $state('Prueba X');
 	let dryRun = $state(true);
+	let collapsed = $state(false);
 	let sending = $state(false);
 	let result = $state<
 		| { kind: 'ok'; sid: string; info: string; dryRun: boolean; raw: string; status: number }
@@ -21,11 +23,25 @@
 		} catch {
 			// ignore
 		}
+		try {
+			const c = localStorage.getItem(COLLAPSED_KEY);
+			if (c !== null) collapsed = c === '1';
+		} catch {
+			// ignore
+		}
 	});
 
 	$effect(() => {
 		try {
 			localStorage.setItem(DRY_RUN_KEY, dryRun ? '1' : '0');
+		} catch {
+			// ignore
+		}
+	});
+
+	$effect(() => {
+		try {
+			localStorage.setItem(COLLAPSED_KEY, collapsed ? '1' : '0');
 		} catch {
 			// ignore
 		}
@@ -98,12 +114,22 @@
 	}
 </script>
 
-<section class="sender">
+<section class="sender" class:collapsed>
 	<header>
-		<h2>Enviar mensaje</h2>
+		<button
+			type="button"
+			class="toggle"
+			onclick={() => (collapsed = !collapsed)}
+			aria-expanded={!collapsed}
+			title={collapsed ? 'Expandir' : 'Colapsar'}
+		>
+			<span class="chevron" class:rotated={collapsed}>▾</span>
+			<h2>Enviar mensaje</h2>
+		</button>
 		<span class="endpoint">POST /enviar_mensaje</span>
 	</header>
 
+	{#if !collapsed}
 	<form onsubmit={send}>
 		<label>
 			Número
@@ -167,6 +193,7 @@
 			</div>
 		{/if}
 	</form>
+	{/if}
 </section>
 
 <style>
@@ -181,10 +208,42 @@
 
 	header {
 		display: flex;
-		align-items: baseline;
+		align-items: center;
 		justify-content: space-between;
 		gap: 1rem;
 		margin-bottom: 0.75rem;
+	}
+
+	.sender.collapsed header {
+		margin-bottom: 0;
+	}
+
+	.toggle {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		background: transparent;
+		border: none;
+		padding: 0;
+		margin: 0;
+		cursor: pointer;
+		color: inherit;
+		font: inherit;
+	}
+
+	.toggle:hover h2 {
+		color: #064d44;
+	}
+
+	.chevron {
+		display: inline-block;
+		font-size: 0.85rem;
+		color: #075e54;
+		transition: transform 0.15s ease;
+	}
+
+	.chevron.rotated {
+		transform: rotate(-90deg);
 	}
 
 	h2 {
