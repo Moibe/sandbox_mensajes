@@ -595,6 +595,17 @@
 			-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 	}
 
+	.row-header > span:nth-child(4),
+	.row-header > span:nth-child(5) {
+		text-align: right;
+	}
+
+	.row-header > span:not(:last-child),
+	li > *:not(:last-child) {
+		padding-right: 0.6rem;
+		border-right: 1px solid #e5e7eb;
+	}
+
 	ul {
 		list-style: none;
 		margin: 0;
