@@ -14,6 +14,7 @@
 		host?: string;
 		origin?: string;
 		original_numero?: string;
+		original_mensaje?: string;
 		_id: number;
 	};
 
@@ -25,6 +26,7 @@
 	let hideHealth = $state(true);
 	let groupRepeats = $state(false);
 	let onlyOwn = $state(false);
+	let hideOwn = $state(false);
 	let selected = $state<CallEvent | null>(null);
 	let es: EventSource | undefined;
 	let nextId = 0;
@@ -140,6 +142,7 @@
 		events.filter((e) => {
 			if (hideHealth && e.path === '/health') return false;
 			if (onlyOwn && e.origin !== APP_ORIGIN) return false;
+			if (hideOwn && e.origin === APP_ORIGIN) return false;
 			const q = query.trim().toLowerCase();
 			if (!q) return true;
 			return (
@@ -151,7 +154,8 @@
 				(e.origin ?? '').toLowerCase().includes(q) ||
 				(e.host ?? '').toLowerCase().includes(q) ||
 				(e.user_agent ?? '').toLowerCase().includes(q) ||
-				(e.original_numero ?? '').toLowerCase().includes(q)
+				(e.original_numero ?? '').toLowerCase().includes(q) ||
+				(e.original_mensaje ?? '').toLowerCase().includes(q)
 			);
 		})
 	);
@@ -254,8 +258,20 @@
 			Agrupar repetidos
 		</label>
 		<label title="Filtra solo eventos con X-Origin = {APP_ORIGIN}">
-			<input type="checkbox" bind:checked={onlyOwn} />
+			<input
+				type="checkbox"
+				bind:checked={onlyOwn}
+				onchange={() => onlyOwn && (hideOwn = false)}
+			/>
 			Solo mis llamadas
+		</label>
+		<label title="Oculta los eventos con X-Origin = {APP_ORIGIN}">
+			<input
+				type="checkbox"
+				bind:checked={hideOwn}
+				onchange={() => hideOwn && (onlyOwn = false)}
+			/>
+			Quita mis llamadas
 		</label>
 	</div>
 
@@ -358,6 +374,10 @@
 							<span class="normalized-badge" title="La API normalizó este número">normalizado</span>
 						{/if}
 					</dd>
+				{/if}
+				{#if selected.original_mensaje !== undefined}
+					<dt>Mensaje enviado</dt>
+					<dd class="msg">{selected.original_mensaje || '(vacío)'}</dd>
 				{/if}
 				{#if selected.summary}
 					<dt>Summary</dt>
@@ -716,6 +736,17 @@
 		font-size: 0.75rem;
 		color: #444;
 		cursor: help;
+	}
+
+	dd.msg {
+		white-space: pre-wrap;
+		word-break: break-word;
+		max-height: 8rem;
+		overflow-y: auto;
+		font-size: 0.8rem;
+		background: #f5f5f4;
+		padding: 0.3rem 0.5rem;
+		border-radius: 4px;
 	}
 
 	.own-badge {
