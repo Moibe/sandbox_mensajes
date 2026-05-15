@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onDestroy, onMount } from 'svelte';
 	import { API_URL, APP_ORIGIN } from './api';
+	import { ipLabel } from './ip-labels';
 
 	type CallEvent = {
 		ts: string;
@@ -27,6 +28,8 @@
 	let groupRepeats = $state(false);
 	let onlyOwn = $state(false);
 	let hideOwn = $state(true);
+	let onlyDry = $state(false);
+	let hideDry = $state(false);
 	let selected = $state<CallEvent | null>(null);
 	let es: EventSource | undefined;
 	let nextId = 0;
@@ -143,6 +146,8 @@
 			if (hideHealth && e.path === '/health') return false;
 			if (onlyOwn && e.origin !== APP_ORIGIN) return false;
 			if (hideOwn && e.origin === APP_ORIGIN) return false;
+			if (onlyDry && !isDryRun(e)) return false;
+			if (hideDry && isDryRun(e)) return false;
 			const q = query.trim().toLowerCase();
 			if (!q) return true;
 			return (
@@ -273,6 +278,22 @@
 			/>
 			Quita mis llamadas
 		</label>
+		<label title="Filtra solo eventos en modo dry-run (no enviados a Twilio)">
+			<input
+				type="checkbox"
+				bind:checked={onlyDry}
+				onchange={() => onlyDry && (hideDry = false)}
+			/>
+			Solo dry-run
+		</label>
+		<label title="Oculta los eventos en modo dry-run">
+			<input
+				type="checkbox"
+				bind:checked={hideDry}
+				onchange={() => hideDry && (onlyDry = false)}
+			/>
+			Quita dry-run
+		</label>
 	</div>
 
 	{#if rows.length === 0}
@@ -305,7 +326,12 @@
 					</span>
 					<span class="status {statusClass(row.status)}">{row.status}</span>
 					<span class="dur">{row.duration_ms}ms</span>
-					<span class="client">{row.client ?? ''}</span>
+					<span class="client">
+						{row.client ?? ''}
+						{#if ipLabel(row.client)}
+							<span class="ip-label" title="Etiqueta para {row.client}">{ipLabel(row.client)}</span>
+						{/if}
+					</span>
 					<span class="summary" title={row.summary ?? ''}>{row.summary ?? ''}</span>
 					<span class="repeat-slot">
 						{#if row.count > 1}<span class="repeat">×{row.count}</span>{/if}
@@ -350,7 +376,12 @@
 				<dt>Duración</dt>
 				<dd>{selected.duration_ms} ms</dd>
 				<dt>Cliente</dt>
-				<dd>{selected.client ?? '—'}</dd>
+				<dd>
+					{selected.client ?? '—'}
+					{#if ipLabel(selected.client)}
+						<span class="ip-label">{ipLabel(selected.client)}</span>
+					{/if}
+				</dd>
 				{#if selected.origin}
 					<dt>Origin</dt>
 					<dd>
@@ -631,6 +662,21 @@
 	.client {
 		color: #888;
 		font-size: 0.72rem;
+	}
+
+	.ip-label {
+		display: inline-block;
+		margin-left: 0.35rem;
+		padding: 0.05rem 0.4rem;
+		font-size: 0.68rem;
+		font-weight: 600;
+		background: rgba(7, 94, 84, 0.12);
+		color: #075e54;
+		border-radius: 3px;
+		letter-spacing: 0.02em;
+		font-family:
+			-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+		cursor: help;
 	}
 
 	.summary {
