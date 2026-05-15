@@ -582,7 +582,7 @@
 
 	.row-header {
 		display: grid;
-		grid-template-columns: 13ch 5rem 22ch 8ch 7ch 15ch 9ch 1fr 1fr auto;
+		grid-template-columns: 13ch 5rem 22ch 8ch 7ch 22ch 9ch 1fr 1fr auto;
 		gap: 0.6rem;
 		padding: 0.35rem 0.4rem;
 		border-bottom: 2px solid #d1d5db;
@@ -620,7 +620,7 @@
 
 	li {
 		display: grid;
-		grid-template-columns: 13ch 5rem 22ch 8ch 7ch 15ch 9ch 1fr 1fr auto;
+		grid-template-columns: 13ch 5rem 22ch 8ch 7ch 22ch 9ch 1fr 1fr auto;
 		gap: 0.6rem;
 		align-items: center;
 		padding: 0.4rem 0.4rem;
@@ -715,11 +715,15 @@
 	.client {
 		color: #888;
 		font-size: 0.72rem;
+		display: flex;
+		align-items: center;
+		gap: 0.35rem;
+		white-space: nowrap;
+		overflow: hidden;
 	}
 
 	.ip-label {
 		display: inline-block;
-		margin-left: 0.35rem;
 		padding: 0.05rem 0.4rem;
 		font-size: 0.68rem;
 		font-weight: 600;
@@ -730,6 +734,7 @@
 		font-family:
 			-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 		cursor: help;
+		flex-shrink: 0;
 	}
 
 	.via {
