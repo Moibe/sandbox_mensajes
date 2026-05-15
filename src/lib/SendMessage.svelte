@@ -8,7 +8,7 @@
 	let numero = $state('+5215534002530');
 	let mensaje = $state('Prueba X');
 	let dryRun = $state(true);
-	let collapsed = $state(false);
+	let collapsed = $state(true);
 	let sending = $state(false);
 	let result = $state<
 		| { kind: 'ok'; sid: string; info: string; dryRun: boolean; raw: string; status: number }

@@ -307,6 +307,16 @@
 			{/if}
 		</div>
 	{:else}
+		<div class="row-header" aria-hidden="true">
+			<span>Hora</span>
+			<span>Método</span>
+			<span>Path</span>
+			<span>Status</span>
+			<span>Dur</span>
+			<span>Cliente</span>
+			<span>Summary</span>
+			<span></span>
+		</div>
 		<ul>
 			{#each rows as row (row._id)}
 				<li
@@ -551,6 +561,21 @@
 		text-align: center;
 		color: #666;
 		font-size: 0.9rem;
+	}
+
+	.row-header {
+		display: grid;
+		grid-template-columns: 13ch 5rem 22ch 5ch 6ch 15ch 1fr auto;
+		gap: 0.6rem;
+		padding: 0.35rem 0.4rem;
+		border-bottom: 2px solid #d1d5db;
+		font-size: 0.7rem;
+		font-weight: 700;
+		color: #6b7280;
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+		font-family:
+			-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 	}
 
 	ul {
