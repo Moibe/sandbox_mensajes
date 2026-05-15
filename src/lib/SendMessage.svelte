@@ -203,7 +203,7 @@
 		margin: 1.25rem;
 		padding: 1rem 1.25rem;
 		box-shadow: 0 4px 18px rgba(0, 0, 0, 0.08);
-		max-width: 1100px;
+		max-width: calc(100vw - 2.5rem);
 	}
 
 	header {

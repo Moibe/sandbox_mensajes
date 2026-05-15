@@ -131,6 +131,12 @@
 		return match ? match[1] : null;
 	}
 
+	function extractVia(summary?: string): string | null {
+		if (!summary) return null;
+		const m = summary.match(/to=([a-z][a-z0-9]*?):/i);
+		return m ? m[1].toLowerCase() : null;
+	}
+
 	function wasNormalized(event: CallEvent): boolean {
 		if (!event.original_numero) return false;
 		const normalized = extractNormalized(event.summary);
@@ -160,7 +166,8 @@
 				(e.host ?? '').toLowerCase().includes(q) ||
 				(e.user_agent ?? '').toLowerCase().includes(q) ||
 				(e.original_numero ?? '').toLowerCase().includes(q) ||
-				(e.original_mensaje ?? '').toLowerCase().includes(q)
+				(e.original_mensaje ?? '').toLowerCase().includes(q) ||
+				(extractVia(e.summary) ?? '').includes(q)
 			);
 		})
 	);
@@ -314,6 +321,8 @@
 			<span>Status</span>
 			<span>Dur</span>
 			<span>Cliente</span>
+			<span>Vía</span>
+			<span>Mensaje</span>
 			<span>Summary</span>
 			<span></span>
 		</div>
@@ -341,6 +350,14 @@
 						{#if ipLabel(row.client)}
 							<span class="ip-label" title="Etiqueta para {row.client}">{ipLabel(row.client)}</span>
 						{/if}
+					</span>
+					<span class="via">
+						{#if extractVia(row.summary)}
+							<span class="via-badge">{extractVia(row.summary)}</span>
+						{/if}
+					</span>
+					<span class="mensaje" title={row.original_mensaje ?? ''}>
+						{row.original_mensaje ?? ''}
 					</span>
 					<span class="summary" title={row.summary ?? ''}>{row.summary ?? ''}</span>
 					<span class="repeat-slot">
@@ -448,7 +465,7 @@
 		margin: 1.25rem;
 		padding: 1rem 1.25rem;
 		box-shadow: 0 4px 18px rgba(0, 0, 0, 0.08);
-		max-width: 1100px;
+		max-width: calc(100vw - 2.5rem);
 	}
 
 	header {
@@ -565,7 +582,7 @@
 
 	.row-header {
 		display: grid;
-		grid-template-columns: 13ch 5rem 22ch 5ch 6ch 15ch 1fr auto;
+		grid-template-columns: 13ch 5rem 22ch 8ch 7ch 15ch 9ch 1fr 1fr auto;
 		gap: 0.6rem;
 		padding: 0.35rem 0.4rem;
 		border-bottom: 2px solid #d1d5db;
@@ -592,7 +609,7 @@
 
 	li {
 		display: grid;
-		grid-template-columns: 13ch 5rem 22ch 5ch 6ch 15ch 1fr auto;
+		grid-template-columns: 13ch 5rem 22ch 8ch 7ch 15ch 9ch 1fr 1fr auto;
 		gap: 0.6rem;
 		align-items: center;
 		padding: 0.4rem 0.4rem;
@@ -702,6 +719,32 @@
 		font-family:
 			-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 		cursor: help;
+	}
+
+	.via {
+		font-size: 0.72rem;
+	}
+
+	.via-badge {
+		display: inline-block;
+		font-size: 0.66rem;
+		font-weight: 600;
+		padding: 0.08rem 0.4rem;
+		border-radius: 3px;
+		background: rgba(37, 211, 102, 0.15);
+		color: #128c7e;
+		letter-spacing: 0.02em;
+		font-family:
+			-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+	}
+
+	.mensaje {
+		color: #333;
+		font-size: 0.72rem;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.summary {

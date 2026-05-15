@@ -6,6 +6,7 @@
  * Ejemplo: '172.10.30.5': 'Backend Pagos'.
  */
 export const IP_LABELS: Record<string, string> = {
+	'127.0.0.1': 'Local',
 	'172.10.30.1': 'Mide Dev'
 };
 
